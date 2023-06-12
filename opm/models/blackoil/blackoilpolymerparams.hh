@@ -71,6 +71,7 @@ struct BlackOilPolymerParams {
 
         if (enablePolymerMolarWeight) {
             plyvmhCoefficients_.resize(numRegions);
+            plyvjmCoefficients_.resize(numRegions);
         }
     }
 
@@ -103,6 +104,14 @@ struct BlackOilPolymerParams {
         Scalar kappa;
     };
 
+    // by the keyword PLYVJM
+    struct PlyvjmCoefficients {
+        Scalar k_mh;
+        Scalar a_mh
+        Scalar cse_ref;
+        Scalar temp_ref;
+    };
+
     struct SkprpolyTable {
         double refConcentration;
         TabulatedTwoDFunction table_func;
@@ -124,6 +133,7 @@ struct BlackOilPolymerParams {
     bool hasPlyshlog_;
 
     std::vector<PlyvmhCoefficients> plyvmhCoefficients_;
+    std::vector<PlyvjmCoefficients> plyvjmCoefficients_;
     std::map<int, TabulatedTwoDFunction> plymwinjTables_;
     std::map<int, TabulatedTwoDFunction> skprwatTables_;
 

@@ -174,7 +174,7 @@ public:
             // different viscosity model is used for POLYMW
             if (enablePolymerMolarWeight) {
                 OpmLog::warning("PLYVISC should not be used in POLYMW runs, "
-                                     "it will have no effect. A viscosity model based on PLYVMH is used instead.\n");
+                                     "it will have no effect. A viscosity model based on PLYVMH or PLYVJM is used instead.\n");
             }
             else {
                 assert(numPvtRegions == plyviscTables.size());
@@ -289,6 +289,7 @@ public:
 
         if constexpr (enablePolymerMolarWeight) {
             const auto& plyvmhTable = eclState.getTableManager().getPlyvmhTable();
+            const auto& plyvjmTable = eclState.getTableManager().getPlyvjmTable();
             if (!plyvmhTable.empty()) {
                 assert(plyvmhTable.size() == numMixRegions);
                 for (size_t regionIdx = 0; regionIdx < numMixRegions; ++regionIdx) {
@@ -297,9 +298,17 @@ public:
                     params_.plyvmhCoefficients_[regionIdx].gamma = plyvmhTable[regionIdx].gamma;
                     params_.plyvmhCoefficients_[regionIdx].kappa = plyvmhTable[regionIdx].kappa;
                 }
-            }
-            else {
-                throw std::runtime_error("PLYVMH keyword must be specified in POLYMW rus \n");
+            }else if (!plyvjmTable.empty()){
+                assert(plyvjmTable.size() == numMixRegions);
+                for (size_t regionIdx = 0; regionIdx < numMixRegions; ++regionIdx) {
+                    params_.plyvjmCoefficients_[regionIdx].k_mh = plyvjmTable[regionIdx].k_mh;
+                    params_.plyvjmCoefficients_[regionIdx].a_mh = plyvjmTable[regionIdx].a_mh;
+                    params_.plyvjmCoefficients_[regionIdx].csep_ref = plyvjmTable[regionIdx].csep_ref;
+                    params_.plyvjmCoefficients_[regionIdx].temp_ref = plyvjmTable[regionIdx].temp_ref;
+                }            
+            
+            }else {
+                throw std::runtime_error("PLYVMH/PLYVJM keyword must be specified in POLYMW runs \n");
             }
 
             // handling PLYMWINJ keyword
@@ -686,6 +695,15 @@ public:
         return params_.plyvmhCoefficients_[polymerMixRegionIdx];
     }
 
+    static const typename BlackOilPolymerParams<Scalar>::PlyvjmCoefficients&
+    plyvjmCoefficients(const ElementContext& elemCtx,
+                       const unsigned scvIdx,
+                       const unsigned timeIdx)
+    {
+        const unsigned polymerMixRegionIdx = elemCtx.problem().plmixnumRegionIndex(elemCtx, scvIdx, timeIdx);
+        return params_.plyvjmCoefficients_[polymerMixRegionIdx];
+    }
+
     static bool hasPlyshlog()
     {
         return params_.hasPlyshlog_;
@@ -833,7 +851,8 @@ public:
      */
     void polymerPropertiesUpdate_(const ElementContext& elemCtx,
                                   unsigned dofIdx,
-                                  unsigned timeIdx)
+                                  unsigned timeIdx,
+                                  const EclipseState& eclState)
     {
         const auto linearizationType = elemCtx.linearizationType();
         const PrimaryVariables& priVars = elemCtx.primaryVars(dofIdx, timeIdx);
@@ -875,19 +894,57 @@ public:
             // effectiveWaterViscosity / effectivePolymerViscosity
             polymerViscosityCorrection_ =  (muWater / waterViscosityCorrection_) / viscosityPolymerEffective;
         }
-        else { // based on PLYVMH
-            const auto& plyvmhCoefficients = PolymerModule::plyvmhCoefficients(elemCtx, dofIdx, timeIdx);
-            const Scalar k_mh = plyvmhCoefficients.k_mh;
-            const Scalar a_mh = plyvmhCoefficients.a_mh;
-            const Scalar gamma = plyvmhCoefficients.gamma;
-            const Scalar kappa = plyvmhCoefficients.kappa;
+        else { 
+            const auto& plyvmhTable = eclState.getTableManager().getPlyvmhTable();
+            const auto& plyvjmTable = eclState.getTableManager().getPlyvjmTable();
+                    
+           // based on PLYVMH
+           if(!plyvmhTable.empty()){
+                const auto& plyvmhCoefficients = PolymerModule::plyvmhCoefficients(elemCtx, dofIdx, timeIdx);
+                const Scalar k_mh = plyvmhCoefficients.k_mh;
+                const Scalar a_mh = plyvmhCoefficients.a_mh;
+                const Scalar gamma = plyvmhCoefficients.gamma;
+                const Scalar kappa = plyvmhCoefficients.kappa;
 
-            // viscosity model based on Mark-Houwink equation and Huggins equation
-            // 1000 is a emperical constant, most likely related to unit conversion
-            const Evaluation intrinsicViscosity = k_mh * pow(polymerMoleWeight_ * 1000., a_mh);
-            const Evaluation x = polymerConcentration_ * intrinsicViscosity;
-            waterViscosityCorrection_ = 1.0 / (1.0 + gamma * (x + kappa * x * x));
-            polymerViscosityCorrection_ = 1.0;
+                // viscosity model based on Mark-Houwink equation and Huggins equation
+                // 1000 is a emperical constant, most likely related to unit conversion
+                const Evaluation intrinsicViscosity = k_mh * pow(polymerMoleWeight_ * 1000., a_mh);
+                const Evaluation x = polymerConcentration_ * intrinsicViscosity;
+                waterViscosityCorrection_ = 1.0 / (1.0 + gamma * (x + kappa * x * x));
+                polymerViscosityCorrection_ = 1.0;
+            }else if(!plyvjmTable.empty()){
+                // Zhitao, 6/12/2023
+                const Scalar cmax = PolymerModule::plymaxMaxConcentration(elemCtx, dofIdx, timeIdx);
+                const auto& fs = asImp_().fluidState_;
+                const Evaluation& muWater = fs.viscosity(waterPhaseIdx);
+                //const auto& viscosityMultiplier = PolymerModule::plyviscViscosityMultiplierTable(elemCtx, dofIdx, timeIdx);
+                //const Evaluation viscosityMixture = viscosityMultiplier.eval(polymerConcentration_, /*extrapolate=*/true) * muWater;
+                // UTCHEM
+                const auto& plyvmhCoefficients = PolymerModule::plyvjmCoefficients(elemCtx, dofIdx, timeIdx);
+                const Scalar k_mh = plyvjmCoefficients.k_mh;
+                const Scalar a_mh = plyvjmCoefficients.a_mh;
+                const Scalar cse_ref = plyvjmCoefficients.cse_ref;
+                const Scalar temp_ref = plyvjmCoefficients.temp_ref;
+
+                // viscosity model based on UTCHEM's Jouenne model
+                // 1000 is a emperical constant, most likely related to unit conversion
+                const Evaluation intrinsicViscosity = k_mh * pow(polymerMoleWeight_ * 1000., a_mh);
+                const Evaluation x = polymerConcentration_ * intrinsicViscosity;
+                const Evaluation viscosityMixture = muWater * (1.0 + x + 0.56 * pow(x, 2.17) + 0.0026 * pow(x, 4.72));
+                
+                // Do the Todd-Longstaff mixing
+                const Scalar plymixparToddLongstaff = PolymerModule::plymixparToddLongstaff(elemCtx, dofIdx, timeIdx);
+                const Evaluation viscosityPolymer = viscosityMultiplier.eval(cmax, /*extrapolate=*/true) * muWater;
+                const Evaluation viscosityPolymerEffective = pow(viscosityMixture, plymixparToddLongstaff) * pow(viscosityPolymer, 1.0 - plymixparToddLongstaff);
+                const Evaluation viscosityWaterEffective = pow(viscosityMixture, plymixparToddLongstaff) * pow(muWater, 1.0 - plymixparToddLongstaff);
+
+                const Evaluation cbar = polymerConcentration_ / cmax;
+                // waterViscosity / effectiveWaterViscosity
+                waterViscosityCorrection_ = muWater * ((1.0 - cbar) / viscosityWaterEffective + cbar / viscosityPolymerEffective);
+                // effectiveWaterViscosity / effectivePolymerViscosity
+                polymerViscosityCorrection_ =  (muWater / waterViscosityCorrection_) / viscosityPolymerEffective;
+                
+            }
         }
 
         // adjust water mobility
@@ -953,7 +1010,8 @@ class BlackOilPolymerIntensiveQuantities<TypeTag, false>
 public:
     void polymerPropertiesUpdate_(const ElementContext&,
                                   unsigned,
-                                  unsigned)
+                                  unsigned,
+                                  const EclipseState& eclState)
     { }
 
     const Evaluation& polymerMoleWeight() const
