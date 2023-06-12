@@ -107,7 +107,7 @@ struct BlackOilPolymerParams {
     // by the keyword PLYVJM
     struct PlyvjmCoefficients {
         Scalar k_mh;
-        Scalar a_mh
+        Scalar a_mh;
         Scalar cse_ref;
         Scalar temp_ref;
     };

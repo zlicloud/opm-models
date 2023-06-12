@@ -40,7 +40,7 @@
 
 #include <opm/common/TimingMacros.hpp>
 #include <opm/common/OpmLog/OpmLog.hpp>
-
+#include <opm/input/eclipse/EclipseState/EclipseState.hpp>
 #include <opm/input/eclipse/EclipseState/Grid/FaceDir.hpp>
 
 #include <opm/material/fluidstates/BlackOilFluidState.hpp>
@@ -171,7 +171,7 @@ public:
     /*!
      * \copydoc IntensiveQuantities::update
      */
-    void update(const ElementContext& elemCtx, unsigned dofIdx, unsigned timeIdx)
+    void update(const ElementContext& elemCtx, unsigned dofIdx, unsigned timeIdx, const EclipseState& eclState)
     {
         ParentType::update(elemCtx, dofIdx, timeIdx);
         OPM_TIMEBLOCK_LOCAL(blackoilIntensiveQuanititiesUpdate);
@@ -455,7 +455,7 @@ public:
 
         asImp_().solventPvtUpdate_(elemCtx, dofIdx, timeIdx);
         asImp_().zPvtUpdate_();
-        asImp_().polymerPropertiesUpdate_(elemCtx, dofIdx, timeIdx);
+        asImp_().polymerPropertiesUpdate_(elemCtx, dofIdx, timeIdx, eclState);
         asImp_().updateEnergyQuantities_(elemCtx, dofIdx, timeIdx, paramCache);
         asImp_().foamPropertiesUpdate_(elemCtx, dofIdx, timeIdx);
         asImp_().MICPPropertiesUpdate_(elemCtx, dofIdx, timeIdx);
