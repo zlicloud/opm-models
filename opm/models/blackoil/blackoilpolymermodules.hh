@@ -920,7 +920,7 @@ public:
                 //const auto& viscosityMultiplier = PolymerModule::plyviscViscosityMultiplierTable(elemCtx, dofIdx, timeIdx);
                 //const Evaluation viscosityMixture = viscosityMultiplier.eval(polymerConcentration_, /*extrapolate=*/true) * muWater;
                 // UTCHEM
-                const auto& plyvmhCoefficients = PolymerModule::plyvjmCoefficients(elemCtx, dofIdx, timeIdx);
+                const auto& plyvjmCoefficients = PolymerModule::plyvjmCoefficients(elemCtx, dofIdx, timeIdx);
                 const Scalar k_mh = plyvjmCoefficients.k_mh;
                 const Scalar a_mh = plyvjmCoefficients.a_mh;
                 const Scalar cse_ref = plyvjmCoefficients.cse_ref;
@@ -934,7 +934,8 @@ public:
                 
                 // Do the Todd-Longstaff mixing
                 const Scalar plymixparToddLongstaff = PolymerModule::plymixparToddLongstaff(elemCtx, dofIdx, timeIdx);
-                const Evaluation viscosityPolymer = viscosityMultiplier.eval(cmax, /*extrapolate=*/true) * muWater;
+                const Evaluation y = cmax * intrinsicViscosity;
+                const Evaluation viscosityPolymer = muWater * (1.0 + y + 0.56 * pow(y, 2.17) + 0.0026 * pow(y, 4.72));
                 const Evaluation viscosityPolymerEffective = pow(viscosityMixture, plymixparToddLongstaff) * pow(viscosityPolymer, 1.0 - plymixparToddLongstaff);
                 const Evaluation viscosityWaterEffective = pow(viscosityMixture, plymixparToddLongstaff) * pow(muWater, 1.0 - plymixparToddLongstaff);
 
