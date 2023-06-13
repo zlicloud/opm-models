@@ -131,7 +131,8 @@ struct BlackOilPolymerParams {
     std::vector<Scalar> shrate_;
     bool hasShrate_;
     bool hasPlyshlog_;
-
+    bool hasPlyvjm_;
+    
     std::vector<PlyvmhCoefficients> plyvmhCoefficients_;
     std::vector<PlyvjmCoefficients> plyvjmCoefficients_;
     std::map<int, TabulatedTwoDFunction> plymwinjTables_;

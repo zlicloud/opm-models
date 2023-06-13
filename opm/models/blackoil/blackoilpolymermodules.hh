@@ -290,6 +290,7 @@ public:
         if constexpr (enablePolymerMolarWeight) {
             const auto& plyvmhTable = eclState.getTableManager().getPlyvmhTable();
             const auto& plyvjmTable = eclState.getTableManager().getPlyvjmTable();
+            params_.hasPlyvjm_ = !plyvjmTable.empty();
             if (!plyvmhTable.empty()) {
                 assert(plyvmhTable.size() == numMixRegions);
                 for (size_t regionIdx = 0; regionIdx < numMixRegions; ++regionIdx) {
@@ -714,6 +715,12 @@ public:
         return params_.hasShrate_;
     }
 
+    static bool hasPlyvjm()
+    {
+        return params_.hasPlyvjm_;
+    }
+
+
     static const Scalar shrate(unsigned pvtnumRegionIdx)
     {
         return params_.shrate_[pvtnumRegionIdx];
@@ -851,8 +858,7 @@ public:
      */
     void polymerPropertiesUpdate_(const ElementContext& elemCtx,
                                   unsigned dofIdx,
-                                  unsigned timeIdx,
-                                  const EclipseState& eclState)
+                                  unsigned timeIdx)
     {
         const auto linearizationType = elemCtx.linearizationType();
         const PrimaryVariables& priVars = elemCtx.primaryVars(dofIdx, timeIdx);
@@ -894,12 +900,9 @@ public:
             // effectiveWaterViscosity / effectivePolymerViscosity
             polymerViscosityCorrection_ =  (muWater / waterViscosityCorrection_) / viscosityPolymerEffective;
         }
-        else { 
-            const auto& plyvmhTable = eclState.getTableManager().getPlyvmhTable();
-            const auto& plyvjmTable = eclState.getTableManager().getPlyvjmTable();
-                    
+        else {                     
            // based on PLYVMH
-           if(!plyvmhTable.empty()){
+           if(!PolymerModule::hasPlyvjm()){
                 const auto& plyvmhCoefficients = PolymerModule::plyvmhCoefficients(elemCtx, dofIdx, timeIdx);
                 const Scalar k_mh = plyvmhCoefficients.k_mh;
                 const Scalar a_mh = plyvmhCoefficients.a_mh;
@@ -912,7 +915,7 @@ public:
                 const Evaluation x = polymerConcentration_ * intrinsicViscosity;
                 waterViscosityCorrection_ = 1.0 / (1.0 + gamma * (x + kappa * x * x));
                 polymerViscosityCorrection_ = 1.0;
-            }else if(!plyvjmTable.empty()){
+            }else{
                 // Zhitao, 6/12/2023
                 const Scalar cmax = PolymerModule::plymaxMaxConcentration(elemCtx, dofIdx, timeIdx);
                 const auto& fs = asImp_().fluidState_;
