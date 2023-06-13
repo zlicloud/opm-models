@@ -926,7 +926,7 @@ public:
                 const auto& plyvjmCoefficients = PolymerModule::plyvjmCoefficients(elemCtx, dofIdx, timeIdx);
                 const Scalar k_mh = plyvjmCoefficients.k_mh;
                 const Scalar a_mh = plyvjmCoefficients.a_mh;
-                const Scalar cse_ref = plyvjmCoefficients.cse_ref;
+                const Scalar csep_ref = plyvjmCoefficients.csep_ref;
                 const Scalar temp_ref = plyvjmCoefficients.temp_ref;
 
                 // viscosity model based on UTCHEM's Jouenne model
