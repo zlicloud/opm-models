@@ -1014,8 +1014,7 @@ class BlackOilPolymerIntensiveQuantities<TypeTag, false>
 public:
     void polymerPropertiesUpdate_(const ElementContext&,
                                   unsigned,
-                                  unsigned,
-                                  const EclipseState& eclState)
+                                  unsigned)
     { }
 
     const Evaluation& polymerMoleWeight() const
